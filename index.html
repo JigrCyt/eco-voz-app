@@ -390,6 +390,27 @@
 
   .btn-secondary:disabled { opacity: 0.4; cursor: default; }
 
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    padding: 12px;
+    font-size: 13.5px;
+    width: 100%;
+  }
+
+  .btn-ghost:active { color: var(--live); border-color: var(--live); }
+
+  .level-tag {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    transition: color 0.15s ease;
+  }
+
+  .level-tag.speaking { color: var(--accent); }
+
   .rec-pill {
     display: none;
     align-items: center;
@@ -548,12 +569,14 @@
         <div class="prompt-phrase" id="promptPhrase">Silencio</div>
         <p class="prompt-hint" id="promptHint"></p>
         <canvas class="wave" id="stepWave"></canvas>
+        <span class="level-tag" id="levelTag">Calibrando…</span>
       </div>
 
       <div class="controls">
         <button class="btn-secondary" id="prevBtn">←</button>
         <button class="btn-primary" id="nextBtn">Ya lo he dicho →</button>
       </div>
+      <button class="btn-ghost" id="retryStepBtn">No me ha salido bien — marcar y repetir</button>
     </section>
 
     <!-- OUTRO -->
@@ -578,6 +601,7 @@
   <input type="hidden" name="gender" id="f_gender">
   <input type="hidden" name="region" id="f_region">
   <input type="hidden" name="deviceInfo" id="f_deviceInfo">
+  <input type="hidden" name="timestamps" id="f_timestamps">
   <input type="file" name="audio" id="f_audio">
 </form>
 
