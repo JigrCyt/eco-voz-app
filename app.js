@@ -469,10 +469,10 @@ function updateClock() {
 el('statSteps').textContent = steps.length;
 
 // ---------------------------------------------------------------
-// Envío al backend (formulario oculto -> Apps Script, sin CORS)
+// Envío al backend (fetch + FormData, sin depender del formulario
+// oculto: Safari no incluye de forma fiable un archivo asignado a
+// input.files vía DataTransfer al enviar un <form>)
 // ---------------------------------------------------------------
-let submitTimeout = null;
-
 function deviceInfoString() {
   return [
     navigator.userAgent,
@@ -492,7 +492,7 @@ function buildTimestampsPayload(baseName) {
   });
 }
 
-function submitRecording() {
+async function submitRecording() {
   const note = el('sendNote');
   note.className = 'note-box';
   note.textContent = 'Enviando…';
@@ -504,53 +504,38 @@ function submitRecording() {
     return;
   }
 
-  el('uploadForm').action = APPS_SCRIPT_URL;
-  el('f_consent').value = 'si';
-  el('f_contactEmail').value = el('contactEmail').value.trim();
-  el('f_ageRange').value = el('ageRange').value;
-  el('f_gender').value = el('gender').value;
-  el('f_region').value = el('region').value.trim();
-  el('f_deviceInfo').value = deviceInfoString();
-
   const isMp4 = recordingMimeType.startsWith('audio/mp4');
   const ext = isMp4 ? 'mp4' : 'webm';
   const baseName = `eco_voz_${Date.now()}`;
   const blob = new Blob(recordedChunks, { type: recordingMimeType || 'audio/webm' });
   const file = new File([blob], `${baseName}.${ext}`, { type: blob.type });
 
-  el('f_timestamps').value = buildTimestampsPayload(baseName);
+  const formData = new FormData();
+  formData.append('consent', 'si');
+  formData.append('contactEmail', el('contactEmail').value.trim());
+  formData.append('ageRange', el('ageRange').value);
+  formData.append('gender', el('gender').value);
+  formData.append('region', el('region').value.trim());
+  formData.append('deviceInfo', deviceInfoString());
+  formData.append('timestamps', buildTimestampsPayload(baseName));
+  formData.append('audio', file, file.name);
 
-  const dt = new DataTransfer();
-  dt.items.add(file);
-  el('f_audio').files = dt.files;
-
-  el('uploadForm').submit();
-
-  clearTimeout(submitTimeout);
-  submitTimeout = setTimeout(() => {
-    note.className = 'note-box error';
-    note.textContent = 'No hemos recibido confirmación del servidor. Puede que ya se haya enviado igualmente — si no, pulsa reintentar.';
-    el('retryBtn').hidden = false;
-  }, 15000);
-}
-
-window.addEventListener('message', (event) => {
-  const data = event.data;
-  if (!data || data.source !== 'eco-app') return;
-  clearTimeout(submitTimeout);
-  const note = el('sendNote');
-  if (data.status === 'ok') {
+  try {
+    // Apps Script no envía cabeceras CORS, así que la respuesta es opaca:
+    // no podemos leer su contenido, pero que fetch no lance error confirma
+    // que la petición completó el viaje de ida y vuelta al servidor.
+    await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: formData });
     note.className = 'note-box ok';
-    note.textContent = data.message || 'Grabación recibida. ¡Gracias!';
+    note.textContent = 'Grabación enviada. ¡Gracias!';
     el('outroTitle').textContent = 'Gracias por tu ayuda';
     el('outroLede').textContent = 'Tu grabación se ha enviado correctamente. Ya puedes cerrar esta pestaña.';
     el('retryBtn').hidden = true;
-  } else {
+  } catch (err) {
     note.className = 'note-box error';
-    note.textContent = data.message || 'Ha habido un error al enviar la grabación.';
+    note.textContent = 'No se ha podido enviar la grabación. Comprueba tu conexión y pulsa reintentar.';
     el('retryBtn').hidden = false;
   }
-});
+}
 
 el('retryBtn').addEventListener('click', submitRecording);
 

@@ -601,19 +601,6 @@
   <footer>Proyecto ECO-Siri — recogida de voz de voluntarios para el modelo wake word</footer>
 </div>
 
-<!-- envío al backend (Google Apps Script) sin CORS, via formulario oculto -->
-<iframe name="uploadTarget" id="uploadTarget" style="display:none" title="upload"></iframe>
-<form id="uploadForm" method="POST" enctype="multipart/form-data" target="uploadTarget" style="display:none">
-  <input type="hidden" name="consent" id="f_consent">
-  <input type="hidden" name="contactEmail" id="f_contactEmail">
-  <input type="hidden" name="ageRange" id="f_ageRange">
-  <input type="hidden" name="gender" id="f_gender">
-  <input type="hidden" name="region" id="f_region">
-  <input type="hidden" name="deviceInfo" id="f_deviceInfo">
-  <input type="hidden" name="timestamps" id="f_timestamps">
-  <input type="file" name="audio" id="f_audio">
-</form>
-
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>
