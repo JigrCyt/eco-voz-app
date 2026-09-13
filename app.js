@@ -469,9 +469,13 @@ function updateClock() {
 el('statSteps').textContent = steps.length;
 
 // ---------------------------------------------------------------
-// Envío al backend (fetch + FormData, sin depender del formulario
-// oculto: Safari no incluye de forma fiable un archivo asignado a
-// input.files vía DataTransfer al enviar un <form>)
+// Envío al backend: formulario oculto + iframe (navegación real,
+// NO fetch — Google intercepta/bloquea las peticiones fetch de
+// origen cruzado hacia /exec antes de que lleguen a doPost). El
+// audio va como texto base64 en un campo oculto normal, no como
+// input[type=file], porque Safari no incluye de forma fiable un
+// archivo asignado a input.files vía DataTransfer al enviar un
+// <form>.
 // ---------------------------------------------------------------
 function deviceInfoString() {
   return [
@@ -492,6 +496,56 @@ function buildTimestampsPayload(baseName) {
   });
 }
 
+function blobToBase64_(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      resolve(dataUrl.substring(dataUrl.indexOf(',') + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+let submitFrameCounter_ = 0;
+
+function postViaHiddenForm_(fields) {
+  return new Promise((resolve) => {
+    submitFrameCounter_++;
+    const frameName = `uploadFrame_${submitFrameCounter_}_${Date.now()}`;
+    const iframe = document.createElement('iframe');
+    iframe.name = frameName;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = APPS_SCRIPT_URL;
+    form.target = frameName;
+    form.style.display = 'none';
+
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+
+    // No hay confirmación fiable del servidor (frame-ancestors bloquea
+    // leer la respuesta), así que resolvemos tras un margen prudente.
+    setTimeout(() => {
+      form.remove();
+      iframe.remove();
+      resolve();
+    }, 4000);
+  });
+}
+
 async function submitRecording() {
   const note = el('sendNote');
   note.className = 'note-box';
@@ -507,24 +561,23 @@ async function submitRecording() {
   const isMp4 = recordingMimeType.startsWith('audio/mp4');
   const ext = isMp4 ? 'mp4' : 'webm';
   const baseName = `eco_voz_${Date.now()}`;
+  const filename = `${baseName}.${ext}`;
   const blob = new Blob(recordedChunks, { type: recordingMimeType || 'audio/webm' });
-  const file = new File([blob], `${baseName}.${ext}`, { type: blob.type });
-
-  const formData = new FormData();
-  formData.append('consent', 'si');
-  formData.append('contactEmail', el('contactEmail').value.trim());
-  formData.append('ageRange', el('ageRange').value);
-  formData.append('gender', el('gender').value);
-  formData.append('region', el('region').value.trim());
-  formData.append('deviceInfo', deviceInfoString());
-  formData.append('timestamps', buildTimestampsPayload(baseName));
-  formData.append('audio', file, file.name);
 
   try {
-    // Apps Script no envía cabeceras CORS, así que la respuesta es opaca:
-    // no podemos leer su contenido, pero que fetch no lance error confirma
-    // que la petición completó el viaje de ida y vuelta al servidor.
-    await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: formData });
+    const audioBase64 = await blobToBase64_(blob);
+    await postViaHiddenForm_({
+      consent: 'si',
+      contactEmail: el('contactEmail').value.trim(),
+      ageRange: el('ageRange').value,
+      gender: el('gender').value,
+      region: el('region').value.trim(),
+      deviceInfo: deviceInfoString(),
+      timestamps: buildTimestampsPayload(baseName),
+      audioBase64,
+      audioMimeType: blob.type,
+      audioFilename: filename,
+    });
     note.className = 'note-box ok';
     note.textContent = 'Grabación enviada. ¡Gracias!';
     el('outroTitle').textContent = 'Gracias por tu ayuda';
@@ -623,25 +676,26 @@ async function testUploadQuick_() {
 
   const wav = makeSilentWavBlob_(1, 8000);
   const filename = `eco_test_${Date.now()}.wav`;
-  const file = new File([wav], filename, { type: 'audio/wav' });
-
-  const formData = new FormData();
-  formData.append('consent', 'si');
-  formData.append('contactEmail', '');
-  formData.append('ageRange', '30–44');
-  formData.append('gender', 'Otro');
-  formData.append('region', 'PRUEBA-BOTON-TEMPORAL');
-  formData.append('deviceInfo', navigator.userAgent);
-  formData.append('timestamps', JSON.stringify({ test: true, at: new Date().toISOString() }));
-  formData.append('audio', file, filename);
 
   try {
-    await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: formData });
+    const audioBase64 = await blobToBase64_(wav);
+    await postViaHiddenForm_({
+      consent: 'si',
+      contactEmail: '',
+      ageRange: '30–44',
+      gender: 'Otro',
+      region: 'PRUEBA-BOTON-TEMPORAL',
+      deviceInfo: navigator.userAgent,
+      timestamps: JSON.stringify({ test: true, at: new Date().toISOString() }),
+      audioBase64,
+      audioMimeType: 'audio/wav',
+      audioFilename: filename,
+    });
     status.className = 'note-box ok';
     status.textContent = 'Prueba enviada. Comprueba Drive/Sheet y los logs de Ejecuciones en Apps Script.';
   } catch (err) {
     status.className = 'note-box error';
-    status.textContent = 'Error de red al enviar la prueba: ' + err.message;
+    status.textContent = 'Error al enviar la prueba: ' + err.message;
   }
 }
 
