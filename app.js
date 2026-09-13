@@ -138,6 +138,165 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 // ---------------------------------------------------------------
+// Detección de voz (mismo esquema que eco_siri/audio_levels.py:
+// umbral adaptado al ruido ambiente + histéresis de activación/liberación)
+// ---------------------------------------------------------------
+const VAD_MIN_THRESHOLD = 0.012;
+const VAD_MAX_THRESHOLD = 0.22;
+const VAD_NOISE_MULTIPLIER = 4.0;
+const VAD_RELEASE_RATIO = 0.8;
+
+let audioCtx = null;
+let analyser = null;
+let levelBuffer = null;
+let levelRAF = null;
+let levelHistory = [];
+const LEVEL_HISTORY_LEN = 26;
+
+let noiseFloor = 0.02;
+let speechThreshold = 0.08;
+let hysteresisActive = false;
+let speechSegStartMs = null;
+let silenceSamples = [];
+
+function setupLevelMeter() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  source.connect(analyser);
+  levelBuffer = new Float32Array(analyser.fftSize);
+  loopLevel();
+}
+
+function stopLevelMeter() {
+  if (levelRAF) cancelAnimationFrame(levelRAF);
+  levelRAF = null;
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+}
+
+function computeRms() {
+  analyser.getFloatTimeDomainData(levelBuffer);
+  let sum = 0;
+  for (let i = 0; i < levelBuffer.length; i++) sum += levelBuffer[i] * levelBuffer[i];
+  return Math.sqrt(sum / levelBuffer.length);
+}
+
+function loopLevel() {
+  const level = computeRms();
+  handleLevelSample(level);
+  updateLevelVisual(level);
+  levelRAF = requestAnimationFrame(loopLevel);
+}
+
+function handleLevelSample(level) {
+  if (current === 0) {
+    silenceSamples.push(level);
+    return;
+  }
+  const elapsedMs = Date.now() - startTime;
+  if (!hysteresisActive) {
+    if (level >= speechThreshold) {
+      hysteresisActive = true;
+      speechSegStartMs = elapsedMs;
+    }
+  } else if (level < speechThreshold * VAD_RELEASE_RATIO) {
+    hysteresisActive = false;
+    currentStepSpeechSegments.push([speechSegStartMs, elapsedMs]);
+    speechSegStartMs = null;
+  }
+}
+
+function finalizeNoiseFloor() {
+  if (silenceSamples.length) {
+    const sorted = silenceSamples.slice().sort((a, b) => a - b);
+    noiseFloor = sorted[Math.floor(sorted.length * 0.2)] || 0.005;
+  }
+  speechThreshold = Math.min(Math.max(VAD_MIN_THRESHOLD, noiseFloor * VAD_NOISE_MULTIPLIER), VAD_MAX_THRESHOLD);
+}
+
+function updateLevelVisual(level) {
+  levelHistory.push(level);
+  if (levelHistory.length > LEVEL_HISTORY_LEN) levelHistory.shift();
+  drawLevelMeter();
+  const tag = el('levelTag');
+  if (tag) {
+    if (current === 0) {
+      tag.textContent = 'Calibrando nivel de ruido…';
+      tag.classList.remove('speaking');
+    } else {
+      tag.textContent = hysteresisActive ? 'Te estamos oyendo' : 'En silencio';
+      tag.classList.toggle('speaking', hysteresisActive);
+    }
+  }
+}
+
+function drawLevelMeter() {
+  const canvas = el('stepWave');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (canvas.width !== Math.round(rect.width * dpr)) {
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+  const gap = 4;
+  const bw = (w - gap * (LEVEL_HISTORY_LEN - 1)) / LEVEL_HISTORY_LEN;
+  const activeColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const idleColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+  for (let i = 0; i < LEVEL_HISTORY_LEN; i++) {
+    const lvl = levelHistory[i] || 0;
+    const norm = Math.min(1, lvl / 0.25);
+    const bh = Math.max(3, norm * h);
+    ctx.fillStyle = hysteresisActive ? activeColor : idleColor;
+    const x = i * (bw + gap);
+    const y = (h - bh) / 2;
+    ctx.fillRect(x, y, bw, bh);
+  }
+}
+
+// ---------------------------------------------------------------
+// Línea de tiempo por paso (para el archivo de marcas)
+// ---------------------------------------------------------------
+let stepTimeline = [];
+let currentStepEntryMs = 0;
+let currentStepRetries = 0;
+let currentStepSpeechSegments = [];
+
+function openStepTimeline() {
+  currentStepEntryMs = Date.now() - startTime;
+  currentStepRetries = 0;
+  currentStepSpeechSegments = [];
+  hysteresisActive = false;
+  speechSegStartMs = null;
+}
+
+function closeCurrentStepTimeline() {
+  const s = steps[current];
+  const nowMs = Date.now() - startTime;
+  if (hysteresisActive && speechSegStartMs !== null) {
+    currentStepSpeechSegments.push([speechSegStartMs, nowMs]);
+    hysteresisActive = false;
+    speechSegStartMs = null;
+  }
+  stepTimeline.push({
+    index: current,
+    phase: s.phase,
+    phrase: s.phrase,
+    negative: !!s.negative,
+    t_start_ms: currentStepEntryMs,
+    t_end_ms: nowMs,
+    retries: currentStepRetries,
+    speech_segments_ms: currentStepSpeechSegments,
+    flagged_no_speech: current !== 0 && currentStepSpeechSegments.length === 0,
+  });
+}
+
+// ---------------------------------------------------------------
 // Estado y navegación
 // ---------------------------------------------------------------
 let current = 0;
@@ -208,27 +367,46 @@ el('startBtn').addEventListener('click', async () => {
   el('progressTrack').hidden = false;
   startTime = Date.now();
   clockInterval = setInterval(updateClock, 1000);
+  setupLevelMeter();
+  openStepTimeline();
   renderStep();
 });
 
 el('nextBtn').addEventListener('click', async () => {
+  closeCurrentStepTimeline();
+  if (current === 0) finalizeNoiseFloor();
+
   if (current < steps.length - 1) {
     current++;
+    openStepTimeline();
     renderStep();
   } else {
     clearInterval(clockInterval);
     el('nextBtn').disabled = true;
     el('nextBtn').textContent = 'Enviando…';
+    el('retryStepBtn').hidden = true;
     await stopRecording();
+    stopLevelMeter();
     el('clock').hidden = true;
     showScreen('outro');
     submitRecording();
   }
 });
 
+el('retryStepBtn').addEventListener('click', () => {
+  currentStepRetries++;
+  const btn = el('retryStepBtn');
+  btn.textContent = `Marcado (${currentStepRetries}) — repite la frase`;
+  clearTimeout(btn._resetTimeout);
+  btn._resetTimeout = setTimeout(() => {
+    btn.textContent = 'No me ha salido bien — marcar y repetir';
+  }, 1800);
+});
+
 el('prevBtn').addEventListener('click', () => {
   if (current > 0) {
     current--;
+    openStepTimeline();
     renderStep();
   }
 });
@@ -255,6 +433,17 @@ function deviceInfoString() {
   ].join(' | ');
 }
 
+function buildTimestampsPayload(baseName) {
+  return JSON.stringify({
+    base_filename: baseName,
+    session_start_iso: new Date(startTime).toISOString(),
+    noise_floor_rms: noiseFloor,
+    speech_threshold_rms: speechThreshold,
+    hysteresis_release_ratio: VAD_RELEASE_RATIO,
+    steps: stepTimeline,
+  });
+}
+
 function submitRecording() {
   const note = el('sendNote');
   note.className = 'note-box';
@@ -277,9 +466,11 @@ function submitRecording() {
 
   const isMp4 = recordingMimeType.startsWith('audio/mp4');
   const ext = isMp4 ? 'mp4' : 'webm';
+  const baseName = `eco_voz_${Date.now()}`;
   const blob = new Blob(recordedChunks, { type: recordingMimeType || 'audio/webm' });
-  const filename = `eco_voz_${Date.now()}.${ext}`;
-  const file = new File([blob], filename, { type: blob.type });
+  const file = new File([blob], `${baseName}.${ext}`, { type: blob.type });
+
+  el('f_timestamps').value = buildTimestampsPayload(baseName);
 
   const dt = new DataTransfer();
   dt.items.add(file);
@@ -361,4 +552,3 @@ function setupWave(canvas, barCount) {
 }
 
 setupWave(el('heroWave'), 28);
-setupWave(el('stepWave'), 22);
