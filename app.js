@@ -267,12 +267,23 @@ let currentStepEntryMs = 0;
 let currentStepRetries = 0;
 let currentStepSpeechSegments = [];
 
+const CALIBRATION_MS = 15000;
+let calibrationTimeout = null;
+
 function openStepTimeline() {
   currentStepEntryMs = Date.now() - startTime;
   currentStepRetries = 0;
   currentStepSpeechSegments = [];
   hysteresisActive = false;
   speechSegStartMs = null;
+
+  clearTimeout(calibrationTimeout);
+  calibrationTimeout = null;
+  if (current === 0) {
+    calibrationTimeout = setTimeout(() => {
+      if (current === 0) goToNextStep();
+    }, CALIBRATION_MS);
+  }
 }
 
 function closeCurrentStepTimeline() {
@@ -328,6 +339,14 @@ function renderStep() {
   el('prevBtn').disabled = current === 0;
   el('nextBtn').textContent = current === steps.length - 1 ? 'Terminar sesión →' : 'Ya lo he dicho →';
   el('progressFill').style.width = `${((current + 1) / steps.length) * 100}%`;
+
+  const isCalibration = current === 0;
+  el('stepControls').hidden = isCalibration;
+  el('retryStepBtn').hidden = isCalibration;
+  el('calibCountdown').hidden = !isCalibration;
+  if (isCalibration) {
+    el('calibCountdown').textContent = `Detectando ruido de fondo… continúa automáticamente en ${CALIBRATION_MS / 1000} s`;
+  }
 }
 
 el('startBtn').addEventListener('click', async () => {
@@ -372,7 +391,8 @@ el('startBtn').addEventListener('click', async () => {
   renderStep();
 });
 
-el('nextBtn').addEventListener('click', async () => {
+async function goToNextStep() {
+  clearTimeout(calibrationTimeout);
   closeCurrentStepTimeline();
   if (current === 0) finalizeNoiseFloor();
 
@@ -391,7 +411,9 @@ el('nextBtn').addEventListener('click', async () => {
     showScreen('outro');
     submitRecording();
   }
-});
+}
+
+el('nextBtn').addEventListener('click', goToNextStep);
 
 el('retryStepBtn').addEventListener('click', () => {
   currentStepRetries++;
@@ -416,6 +438,11 @@ function updateClock() {
   const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const sec = String(elapsed % 60).padStart(2, '0');
   el('clockText').textContent = `${m}:${sec}`;
+
+  if (current === 0) {
+    const remaining = Math.max(0, Math.ceil((CALIBRATION_MS - (Date.now() - startTime)) / 1000));
+    el('calibCountdown').textContent = `Detectando ruido de fondo… continúa automáticamente en ${remaining} s`;
+  }
 }
 
 el('statSteps').textContent = steps.length;

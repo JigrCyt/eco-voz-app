@@ -362,6 +362,14 @@
     gap: 10px;
   }
 
+  .controls[hidden] { display: none; }
+
+  .calib-countdown {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+  }
+
   button {
     font-family: inherit;
     border: none;
@@ -562,17 +570,18 @@
         <span class="phase-tag" id="phaseTag">Silencio</span>
         <span class="step-count mono" id="stepCount">1 / 56</span>
       </div>
-      <p class="phase-note" id="phaseNote"></p>
 
       <div class="prompt-card" id="promptCard">
         <span class="prompt-label" id="promptLabel">Escucha ambiente</span>
         <div class="prompt-phrase" id="promptPhrase">Silencio</div>
+        <p class="phase-note" id="phaseNote"></p>
         <p class="prompt-hint" id="promptHint"></p>
+        <p class="calib-countdown mono" id="calibCountdown" hidden></p>
         <canvas class="wave" id="stepWave"></canvas>
         <span class="level-tag" id="levelTag">Calibrando…</span>
       </div>
 
-      <div class="controls">
+      <div class="controls" id="stepControls">
         <button class="btn-secondary" id="prevBtn">←</button>
         <button class="btn-primary" id="nextBtn">Ya lo he dicho →</button>
       </div>
