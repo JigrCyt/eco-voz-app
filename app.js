@@ -585,3 +585,64 @@ function setupWave(canvas, barCount) {
 }
 
 setupWave(el('heroWave'), 28);
+
+// ---------------------------------------------------------------
+// TEMPORAL: botón de prueba de backend sin grabar sesión completa.
+// Genera un WAV corto de silencio y lo envía tal cual se enviaría
+// una grabación real. Quitar este bloque (y el botón en index.html)
+// cuando se confirme que el envío funciona.
+// ---------------------------------------------------------------
+function makeSilentWavBlob_(durationSec, sampleRate) {
+  const numSamples = durationSec * sampleRate;
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+  const writeString = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + numSamples * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, numSamples * 2, true);
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function testUploadQuick_() {
+  const status = el('testUploadStatus');
+  status.hidden = false;
+  status.className = 'note-box';
+  status.textContent = 'Enviando prueba…';
+
+  const wav = makeSilentWavBlob_(1, 8000);
+  const filename = `eco_test_${Date.now()}.wav`;
+  const file = new File([wav], filename, { type: 'audio/wav' });
+
+  const formData = new FormData();
+  formData.append('consent', 'si');
+  formData.append('contactEmail', '');
+  formData.append('ageRange', '30–44');
+  formData.append('gender', 'Otro');
+  formData.append('region', 'PRUEBA-BOTON-TEMPORAL');
+  formData.append('deviceInfo', navigator.userAgent);
+  formData.append('timestamps', JSON.stringify({ test: true, at: new Date().toISOString() }));
+  formData.append('audio', file, filename);
+
+  try {
+    await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: formData });
+    status.className = 'note-box ok';
+    status.textContent = 'Prueba enviada. Comprueba Drive/Sheet y los logs de Ejecuciones en Apps Script.';
+  } catch (err) {
+    status.className = 'note-box error';
+    status.textContent = 'Error de red al enviar la prueba: ' + err.message;
+  }
+}
+
+el('testUploadBtn').addEventListener('click', testUploadQuick_);
