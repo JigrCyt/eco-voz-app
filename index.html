@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesión de voz ECO</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+  :root {
+    --bg: #f6f4ee;
+    --surface: #ffffff;
+    --surface-alt: #eef0ea;
+    --ink: #16211f;
+    --muted: #5c6b66;
+    --border: #d8dcd2;
+    --accent: #0e7c6b;
+    --accent-ink: #ffffff;
+    --live: #c9435b;
+    --live-soft: #f6dde1;
+    --shadow: 0 1px 2px rgba(20, 30, 27, 0.06), 0 8px 24px rgba(20, 30, 27, 0.07);
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c1614;
+      --surface: #12201d;
+      --surface-alt: #16241f;
+      --ink: #eef2f0;
+      --muted: #93aba3;
+      --border: #24352f;
+      --accent: #4fd1b0;
+      --accent-ink: #06231c;
+      --live: #ff8a92;
+      --live-soft: #3a1c22;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 10px;
+    gap: 12px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .brand-mark {
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+  }
+
+  .brand-sub {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .clock {
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .progress-track {
+    height: 3px;
+    background: var(--border);
+    margin: 0 20px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.35s ease;
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .screen { display: none; flex-direction: column; gap: 16px; flex: 1; }
+  .screen.active { display: flex; }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 4px 0 0;
+  }
+
+  h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .lede {
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow: var(--shadow);
+  }
+
+  .check-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 10px;
+    border-radius: 10px;
+  }
+
+  .check-num {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--surface-alt);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+
+  .check-text strong { display: block; font-size: 14.5px; font-weight: 600; }
+  .check-text span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+
+  .stat .n {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .stat .l {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .field select,
+  .field input[type="text"],
+  .field input[type="email"] {
+    font-family: inherit;
+    font-size: 15px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .consent-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 2px;
+  }
+
+  .consent-row input {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    accent-color: var(--accent);
+  }
+
+  .consent-row p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .phase-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .phase-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+
+  .step-count {
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  .phase-note {
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .prompt-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 28px 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    position: relative;
+    min-height: 220px;
+  }
+
+  .prompt-card.is-negative { border-color: var(--live); }
+
+  .prompt-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .prompt-phrase {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+
+  .prompt-hint {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.5;
+    max-width: 34ch;
+  }
+
+  canvas.wave {
+    width: 100%;
+    height: 44px;
+    display: block;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  button {
+    font-family: inherit;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .btn-primary {
+    flex: 1;
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 16px;
+    font-size: 16px;
+  }
+
+  .btn-primary:disabled { opacity: 0.55; cursor: default; }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 16px 18px;
+    font-size: 15px;
+  }
+
+  .btn-secondary:disabled { opacity: 0.4; cursor: default; }
+
+  .rec-pill {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--live);
+  }
+
+  .rec-pill.on { display: flex; }
+
+  .rec-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--live);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .rec-pill .dot { animation: none; } }
+
+  .note-box {
+    background: var(--surface-alt);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .note-box.error { border-color: var(--live); background: var(--live-soft); color: var(--ink); border-style: solid; }
+  .note-box.ok { border-color: var(--accent); color: var(--ink); border-style: solid; }
+
+  .done-badge {
+    align-self: flex-start;
+    background: var(--surface-alt);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  footer {
+    padding: 10px 20px 18px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-mark">ECO</span>
+      <span class="brand-sub">Recogida de voz</span>
+    </div>
+    <div class="clock" id="clock" hidden>
+      <span class="rec-pill on"><span class="dot"></span>REC</span>
+      <span class="mono" id="clockText">00:00</span>
+    </div>
+  </div>
+  <div class="progress-track" id="progressTrack" hidden>
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+
+  <main>
+    <!-- INTRO + CONSENTIMIENTO + PERFIL -->
+    <section class="screen active" id="screen-intro">
+      <canvas class="wave" id="heroWave" style="height:64px"></canvas>
+      <h1>Grabemos tu voz para entrenar a ECO</h1>
+      <p class="lede">Esta sesión dura unos 15–20 minutos y lo hace todo esta misma página: lees en voz alta una serie de frases cortas, se graba con el micrófono de tu móvil y se envía automáticamente al terminar.</p>
+
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="statSteps">56</div><div class="l">frases</div></div>
+        <div class="stat"><div class="n">~18</div><div class="l">minutos</div></div>
+        <div class="stat"><div class="n">1</div><div class="l">envío</div></div>
+      </div>
+
+      <div class="form-card">
+        <h2>Sobre ti</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="ageRange">Rango de edad</label>
+            <select id="ageRange">
+              <option value="">Selecciona…</option>
+              <option>18–29</option>
+              <option>30–44</option>
+              <option>45–59</option>
+              <option>60+</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="gender">Género</label>
+            <select id="gender">
+              <option value="">Selecciona…</option>
+              <option>Mujer</option>
+              <option>Hombre</option>
+              <option>Otro</option>
+              <option>Prefiero no decirlo</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="region">Región / acento</label>
+          <input type="text" id="region" placeholder="p. ej. Madrid, andaluz, catalán…">
+        </div>
+        <div class="field">
+          <label for="contactEmail">Email de contacto (opcional)</label>
+          <input type="email" id="contactEmail" placeholder="Solo si quieres poder pedir que borremos tu grabación">
+        </div>
+
+        <div class="consent-row">
+          <input type="checkbox" id="consent">
+          <p>He leído la información del proyecto y doy mi consentimiento para que mi voz se grabe y se use, de forma anonimizada, para entrenar y validar el modelo de reconocimiento de voz «Eco» del proyecto ECO-Siri. Sé que puedo pedir que se elimine mi grabación en cualquier momento.</p>
+        </div>
+      </div>
+
+      <div class="checklist">
+        <div class="check-item">
+          <div class="check-num">1</div>
+          <div class="check-text"><strong>Busca un sitio con el ruido habitual de tu casa</strong><span>No hace falta silencio absoluto — mejor si suena como un entorno normal.</span></div>
+        </div>
+        <div class="check-item">
+          <div class="check-num">2</div>
+          <div class="check-text"><strong>Al pulsar «Empezar» te pedirá acceso al micrófono</strong><span>Acepta el permiso — es lo único que necesitas.</span></div>
+        </div>
+        <div class="check-item">
+          <div class="check-num">3</div>
+          <div class="check-text"><strong>Quédate en esta pestaña durante toda la sesión</strong><span>Es una sola grabación continua — no bloquees ni apagues la pantalla del móvil.</span></div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="startBtn">Empezar — dar acceso al micrófono</button>
+      <div class="note-box error" id="startError" hidden></div>
+    </section>
+
+    <!-- SESSION -->
+    <section class="screen" id="screen-session">
+      <div class="phase-row">
+        <span class="phase-tag" id="phaseTag">Silencio</span>
+        <span class="step-count mono" id="stepCount">1 / 56</span>
+      </div>
+      <p class="phase-note" id="phaseNote"></p>
+
+      <div class="prompt-card" id="promptCard">
+        <span class="prompt-label" id="promptLabel">Escucha ambiente</span>
+        <div class="prompt-phrase" id="promptPhrase">Silencio</div>
+        <p class="prompt-hint" id="promptHint"></p>
+        <canvas class="wave" id="stepWave"></canvas>
+      </div>
+
+      <div class="controls">
+        <button class="btn-secondary" id="prevBtn">←</button>
+        <button class="btn-primary" id="nextBtn">Ya lo he dicho →</button>
+      </div>
+    </section>
+
+    <!-- OUTRO -->
+    <section class="screen" id="screen-outro">
+      <span class="done-badge">Sesión completa</span>
+      <h1 id="outroTitle">Enviando tu grabación…</h1>
+      <p class="lede" id="outroLede">Has leído las 56 frases. Un momento mientras se envía el audio, no cierres esta pestaña.</p>
+      <div class="note-box" id="sendNote">Enviando…</div>
+      <button class="btn-primary" id="retryBtn" hidden>Reintentar envío</button>
+    </section>
+  </main>
+
+  <footer>Proyecto ECO — recogida de voz de voluntarios para el modelo wake word</footer>
+</div>
+
+<!-- envío al backend (Google Apps Script) sin CORS, via formulario oculto -->
+<iframe name="uploadTarget" id="uploadTarget" style="display:none" title="upload"></iframe>
+<form id="uploadForm" method="POST" enctype="multipart/form-data" target="uploadTarget" style="display:none">
+  <input type="hidden" name="consent" id="f_consent">
+  <input type="hidden" name="contactEmail" id="f_contactEmail">
+  <input type="hidden" name="ageRange" id="f_ageRange">
+  <input type="hidden" name="gender" id="f_gender">
+  <input type="hidden" name="region" id="f_region">
+  <input type="hidden" name="deviceInfo" id="f_deviceInfo">
+  <input type="file" name="audio" id="f_audio">
+</form>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
