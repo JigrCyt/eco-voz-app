@@ -2,10 +2,10 @@
 // Guion de la sesión
 // ---------------------------------------------------------------
 const wakeBlocks = [
-  { note: 'Di "Econira" con volumen y tono normales, como si llamaras a alguien que está cerca.', n: 5 },
-  { note: 'Di "Econira" un poco más alto, como si llamaras desde el otro lado de la habitación.', n: 5 },
-  { note: 'Di "Econira" en voz baja, casi susurrando.', n: 5 },
-  { note: 'Di "Econira" con una entonación distinta cada vez: como pregunta, como orden seca, rápido, alargado…', n: 5 },
+  { note: 'Volumen y tono normales.', n: 5 },
+  { note: 'Más alto, como a distancia.', n: 5 },
+  { note: 'Voz baja, casi un susurro.', n: 5 },
+  { notes: ['Como pregunta.', 'Como orden seca.', 'Dilo rápido.', 'Alargado.', 'Como quieras.'], n: 5 },
 ];
 
 const commands = [
@@ -40,15 +40,15 @@ const steps = [];
 
 steps.push({
   phase: "Silencio", label: "Escucha ambiente", phrase: "Silencio",
-  hint: "No hables durante unos 15 segundos. Deja el móvil donde vas a grabar el resto de la sesión — nos ayuda a capturar el ruido de fondo típico de tu casa.",
-  note: "Este tramo nos sirve para saber cómo suena tu entorno cuando nadie habla.",
+  hint: "No hables. Deja el móvil donde vas a grabar el resto de la sesión.",
+  note: "Así medimos el ruido de fondo de tu casa.",
 });
 
 wakeBlocks.forEach((block) => {
   for (let i = 0; i < block.n; i++) {
     steps.push({
       phase: "Palabra de activación", label: "Di la palabra", phrase: "Econira",
-      hint: "", note: block.note,
+      hint: "", note: block.notes ? block.notes[i % block.notes.length] : block.note,
     });
   }
 });
@@ -56,28 +56,28 @@ wakeBlocks.forEach((block) => {
 commands.forEach((phrase) => {
   steps.push({
     phase: "Comandos", label: "Di el comando completo", phrase,
-    hint: "", note: "Di la palabra de activación seguida del comando, como lo harías delante del ecógrafo.",
+    hint: "", note: "Como se lo dirías al ecógrafo.",
   });
 });
 
 variants.forEach((phrase) => {
   steps.push({
     phase: "Formas coloquiales", label: "Forma alternativa del comando", phrase,
-    hint: "", note: "Estas son variantes más cortas o coloquiales que la gente usa en la práctica.",
+    hint: "", note: "Forma corta o coloquial del mismo comando.",
   });
 });
 
 negatives.forEach((phrase) => {
   steps.push({
     phase: "Frases sin activación", label: "Léela con naturalidad — no es un comando", phrase,
-    hint: "", note: "Contienen la palabra «eco» pero no como orden — nos ayudan a que el sistema no se active por error.",
+    hint: "", note: "Suena parecido, pero no es una orden.",
     negative: true,
   });
 });
 
 steps.push({
   phase: "Habla libre", label: "Lee el párrafo entero, sin pausas largas", phrase: freeform,
-  hint: "", note: "Un poco de habla natural, sin ningún comando, para completar la muestra.",
+  hint: "", note: "Habla natural, sin comandos.",
   negative: true, long: true,
 });
 
@@ -199,6 +199,10 @@ function handleLevelSample(level) {
     if (level >= speechThreshold) {
       hysteresisActive = true;
       speechSegStartMs = elapsedMs;
+      if (!currentStepHasSpeech) {
+        currentStepHasSpeech = true;
+        updateNextButtonState();
+      }
     }
   } else if (level < speechThreshold * VAD_RELEASE_RATIO) {
     hysteresisActive = false;
@@ -266,6 +270,7 @@ let stepTimeline = [];
 let currentStepEntryMs = 0;
 let currentStepRetries = 0;
 let currentStepSpeechSegments = [];
+let currentStepHasSpeech = false;
 
 const CALIBRATION_MS = 15000;
 let calibrationTimeout = null;
@@ -274,6 +279,7 @@ function openStepTimeline() {
   currentStepEntryMs = Date.now() - startTime;
   currentStepRetries = 0;
   currentStepSpeechSegments = [];
+  currentStepHasSpeech = false;
   hysteresisActive = false;
   speechSegStartMs = null;
 
@@ -337,7 +343,6 @@ function renderStep() {
   el('promptHint').textContent = s.hint || '';
   el('promptCard').classList.toggle('is-negative', !!s.negative);
   el('prevBtn').disabled = current === 0;
-  el('nextBtn').textContent = current === steps.length - 1 ? 'Terminar sesión →' : 'Ya lo he dicho →';
   el('progressFill').style.width = `${((current + 1) / steps.length) * 100}%`;
 
   const isCalibration = current === 0;
@@ -347,6 +352,22 @@ function renderStep() {
   if (isCalibration) {
     el('calibCountdown').textContent = `Detectando ruido de fondo… continúa automáticamente en ${CALIBRATION_MS / 1000} s`;
   }
+
+  updateNextButtonState();
+}
+
+function updateNextButtonState() {
+  const btn = el('nextBtn');
+  const isLastStep = current === steps.length - 1;
+  if (current === 0) {
+    btn.disabled = false;
+    btn.textContent = isLastStep ? 'Terminar sesión →' : 'Ya lo he dicho →';
+    return;
+  }
+  btn.disabled = !currentStepHasSpeech;
+  btn.textContent = currentStepHasSpeech
+    ? (isLastStep ? 'Terminar sesión →' : 'Ya lo he dicho →')
+    : 'Esperando tu voz…';
 }
 
 el('startBtn').addEventListener('click', async () => {
