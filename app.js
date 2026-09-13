@@ -2,25 +2,25 @@
 // Guion de la sesión
 // ---------------------------------------------------------------
 const wakeBlocks = [
-  { note: 'Di "Eco" con volumen y tono normales, como si llamaras a alguien que está cerca.', n: 5 },
-  { note: 'Di "Eco" un poco más alto, como si llamaras desde el otro lado de la habitación.', n: 5 },
-  { note: 'Di "Eco" en voz baja, casi susurrando.', n: 5 },
-  { note: 'Di "Eco" con una entonación distinta cada vez: como pregunta, como orden seca, rápido, alargado…', n: 5 },
+  { note: 'Di "Econira" con volumen y tono normales, como si llamaras a alguien que está cerca.', n: 5 },
+  { note: 'Di "Econira" un poco más alto, como si llamaras desde el otro lado de la habitación.', n: 5 },
+  { note: 'Di "Econira" en voz baja, casi susurrando.', n: 5 },
+  { note: 'Di "Econira" con una entonación distinta cada vez: como pregunta, como orden seca, rápido, alargado…', n: 5 },
 ];
 
 const commands = [
-  "Eco, congelar imagen", "Eco, descongelar imagen", "Eco, tomar fotografía",
-  "Eco, iniciar grabación", "Eco, detener vídeo", "Eco, activar Doppler color",
-  "Eco, apagar Doppler", "Eco, activar Doppler pulsado", "Eco, modo B", "Eco, modo M",
-  "Eco, activar pantalla dividida", "Eco, alternar en pantalla dividida",
-  "Eco, aumentar profundidad", "Eco, disminuir profundidad", "Eco, profundidad máxima",
-  "Eco, subir ganancia", "Eco, bajar ganancia", "Eco, ganancia automática",
-  "Eco, subir foco", "Eco, bajar foco",
+  "Econira, congelar imagen", "Econira, descongelar imagen", "Econira, tomar fotografía",
+  "Econira, iniciar grabación", "Econira, detener vídeo", "Econira, activar Doppler color",
+  "Econira, apagar Doppler", "Econira, activar Doppler pulsado", "Econira, modo B", "Econira, modo M",
+  "Econira, activar pantalla dividida", "Econira, alternar en pantalla dividida",
+  "Econira, aumentar profundidad", "Econira, disminuir profundidad", "Econira, profundidad máxima",
+  "Econira, subir ganancia", "Econira, bajar ganancia", "Econira, ganancia automática",
+  "Econira, subir foco", "Econira, bajar foco",
 ];
 
 const variants = [
-  "Eco, frisa la imagen", "Eco, foto", "Eco, grabar",
-  "Eco, más ganancia", "Eco, menos profundidad", "Eco, modo be",
+  "Econira, frisa la imagen", "Econira, foto", "Econira, grabar",
+  "Econira, más ganancia", "Econira, menos profundidad", "Econira, modo be",
 ];
 
 const negatives = [
@@ -47,7 +47,7 @@ steps.push({
 wakeBlocks.forEach((block) => {
   for (let i = 0; i < block.n; i++) {
     steps.push({
-      phase: "Palabra de activación", label: "Di la palabra", phrase: "Eco",
+      phase: "Palabra de activación", label: "Di la palabra", phrase: "Econira",
       hint: "", note: block.note,
     });
   }
